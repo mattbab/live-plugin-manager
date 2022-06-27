@@ -95,8 +95,13 @@ function extractRepositoryInfo(repository) {
         throw new Error("Invalid repository name");
     }
     const repoParts = parts[1].split("#");
+    let owner = parts[0];
+    const ownerParts = owner.split(':');
+    if (ownerParts.length === 2) {
+        owner = ownerParts[1];
+    }
     const repoInfo = {
-        owner: parts[0],
+        owner,
         repo: repoParts[0],
         ref: repoParts[1] || "master"
     };

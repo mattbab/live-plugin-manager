@@ -42,15 +42,17 @@ const debug_1 = __importDefault(require("debug"));
 const debug = (0, debug_1.default)("live-plugin-manager.NpmRegistryClient");
 class NpmRegistryClient {
     constructor(npmUrl, config) {
-        this.npmUrl = npmUrl;
-        const staticHeaders = {
+        this.defaultHeaders = {
             // https://github.com/npm/registry/blob/master/docs/responses/package-metadata.md
             "accept-encoding": "gzip",
             "accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8, */*",
             "user-agent": config.userAgent || "live-plugin-manager"
         };
-        const authHeader = createAuthHeader(config.auth);
-        this.defaultHeaders = Object.assign(Object.assign({}, staticHeaders), authHeader);
+        this.defaultScope = {
+            registry: npmUrl,
+            auth: config.auth
+        };
+        this.scopes = config.scopes;
     }
     get(name, versionOrTag = "latest") {
         return __awaiter(this, void 0, void 0, function* () {
@@ -101,7 +103,9 @@ class NpmRegistryClient {
             if (!packageInfo.dist || !packageInfo.dist.tarball) {
                 throw new Error("Invalid dist.tarball property");
             }
-            const tgzFile = yield (0, tarballUtils_1.downloadTarball)(packageInfo.dist.tarball, this.defaultHeaders);
+            const npmConfig = this.getNpmConfig(packageInfo.name);
+            const headers = Object.assign(Object.assign({}, this.defaultHeaders), createAuthHeader(npmConfig.auth));
+            const tgzFile = yield (0, tarballUtils_1.downloadTarball)(packageInfo.dist.tarball, headers);
             const pluginDirectory = path.join(destinationDirectory, packageInfo.name);
             try {
                 yield (0, tarballUtils_1.extractTarball)(tgzFile, pluginDirectory);
@@ -112,17 +116,33 @@ class NpmRegistryClient {
             return pluginDirectory;
         });
     }
+    getNpmConfig(name) {
+        const nameParts = name.split('/');
+        let npmConfig = this.defaultScope;
+        // Scoped packages will contain /'s so they will have multiple parts
+        if (nameParts.length > 1) {
+            // Pop off the package name to get the scope
+            nameParts.pop();
+            // Put together the remaining scope parts (in case of nested scopes)
+            const scope = nameParts.join("/");
+            // Only try to lookup the scope if any are configured.
+            if (this.scopes && scope in this.scopes) {
+                npmConfig = this.scopes[scope];
+            }
+        }
+        return npmConfig;
+    }
     getNpmData(name) {
         return __awaiter(this, void 0, void 0, function* () {
-            const regUrl = urlJoin(this.npmUrl, encodeNpmName(name));
-            const headers = this.defaultHeaders;
+            const npmConfig = this.getNpmConfig(name);
+            const regUrl = urlJoin(npmConfig.registry, encodeNpmName(name));
+            const headers = Object.assign(Object.assign({}, this.defaultHeaders), createAuthHeader(npmConfig.auth));
             try {
                 const result = yield httpUtils.httpJsonGet(regUrl, headers);
                 if (!result) {
                     throw new Error("Response is empty");
                 }
-                if (!result.versions
-                    || !result.name) {
+                if (!result.versions || !result.name) {
                     throw new Error("Invalid json format");
                 }
                 return result;

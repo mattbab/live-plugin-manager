@@ -10,17 +10,21 @@ const debug = Debug("live-plugin-manager.NpmRegistryClient");
 
 export class NpmRegistryClient {
 	defaultHeaders: httpUtils.Headers;
-	constructor(private readonly npmUrl: string, config: NpmRegistryConfig) {
-		const staticHeaders = {
+	scopes?: Record<string, NpmRegistryScope>;
+	defaultScope: NpmRegistryScope;
+	constructor(npmUrl: string, config: NpmRegistryConfig) {
+		this.defaultHeaders = {
 			// https://github.com/npm/registry/blob/master/docs/responses/package-metadata.md
 			"accept-encoding": "gzip",
 			"accept": "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8, */*",
 			"user-agent": config.userAgent || "live-plugin-manager"
 		};
 
-		const authHeader = createAuthHeader(config.auth);
-
-		this.defaultHeaders = {...staticHeaders, ...authHeader};
+		this.defaultScope = {
+			registry: npmUrl,
+			auth: config.auth
+		}
+		this.scopes = config.scopes;
 	}
 
 	async get(name: string, versionOrTag: string | null = "latest"): Promise<PackageInfo> {
@@ -83,7 +87,9 @@ export class NpmRegistryClient {
 			throw new Error("Invalid dist.tarball property");
 		}
 
-		const tgzFile = await downloadTarball(packageInfo.dist.tarball, this.defaultHeaders);
+		const npmConfig = this.getNpmConfig(packageInfo.name);
+		const headers = { ...this.defaultHeaders, ...createAuthHeader(npmConfig.auth) }
+		const tgzFile = await downloadTarball(packageInfo.dist.tarball, headers);
 
 		const pluginDirectory = path.join(destinationDirectory, packageInfo.name);
 		try {
@@ -95,16 +101,37 @@ export class NpmRegistryClient {
 		return pluginDirectory;
 	}
 
+  private getNpmConfig(name: string): NpmRegistryScope {
+		const nameParts: string[] = name.split('/');
+		let npmConfig: NpmRegistryScope = this.defaultScope;
+
+		// Scoped packages will contain /'s so they will have multiple parts
+		if (nameParts.length > 1) {
+			// Pop off the package name to get the scope
+			nameParts.pop();
+
+			// Put together the remaining scope parts (in case of nested scopes)
+			const scope: string = nameParts.join("/");
+
+			// Only try to lookup the scope if any are configured.
+			if (this.scopes && scope in this.scopes) {
+				npmConfig = this.scopes[scope];
+			}
+		}
+
+		return npmConfig;
+	}
+
 	private async getNpmData(name: string): Promise<NpmData> {
-		const regUrl = urlJoin(this.npmUrl, encodeNpmName(name));
-		const headers = this.defaultHeaders;
+		const npmConfig = this.getNpmConfig(name);
+		const regUrl = urlJoin(npmConfig.registry, encodeNpmName(name));
+		const headers = { ...this.defaultHeaders, ...createAuthHeader(npmConfig.auth) };
 		try {
 			const result = await httpUtils.httpJsonGet<NpmData>(regUrl, headers);
 			if (!result) {
 				throw new Error("Response is empty");
 			}
-			if (!result.versions
-			|| !result.name) {
+			if (!result.versions || !result.name) {
 				throw new Error("Invalid json format");
 			}
 
@@ -146,6 +173,13 @@ export interface NpmRegistryConfig {
 	auth?: NpmRegistryAuthToken | NpmRegistryAuthBasic;
 
 	userAgent?: string;
+
+	scopes?: Record<string, NpmRegistryScope>;
+}
+
+export interface NpmRegistryScope {
+	registry: string;
+	auth?: NpmRegistryAuthToken | NpmRegistryAuthBasic;
 }
 
 export interface NpmRegistryAuthToken {

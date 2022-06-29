@@ -21,6 +21,7 @@ export interface NpmRegistryScope {
 }
 export interface NpmRegistryAuthToken {
     token: string;
+    header: string;
 }
 export interface NpmRegistryAuthBasic {
     username: string;

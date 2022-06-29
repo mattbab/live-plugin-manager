@@ -36,10 +36,15 @@ const node_fetch_1 = __importDefault(require("node-fetch"));
 const fs = __importStar(require("./fileSystem"));
 const debug_1 = __importDefault(require("debug"));
 const debug = (0, debug_1.default)("live-plugin-manager.HttpUtils");
-function headersBearerAuth(token) {
-    return {
-        Authorization: "Bearer " + token
-    };
+function headersBearerAuth(token, header) {
+    const headers = {};
+    if (header) {
+        headers[header] = token;
+    }
+    else {
+        headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
 }
 exports.headersBearerAuth = headersBearerAuth;
 function headersTokenAuth(token) {

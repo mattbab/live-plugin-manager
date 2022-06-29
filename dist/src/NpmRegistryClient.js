@@ -165,7 +165,7 @@ function createAuthHeader(auth) {
         return {};
     }
     if (isTokenAuth(auth)) {
-        return httpUtils.headersBearerAuth(auth.token); // this should be a JWT I think...
+        return httpUtils.headersBearerAuth(auth.token, auth.header); // this should be a JWT I think...
     }
     else if (isBasicAuth(auth)) {
         return httpUtils.headersBasicAuth(auth.username, auth.password);

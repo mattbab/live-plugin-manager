@@ -7,10 +7,16 @@ export interface Headers {
 	[name: string]: string;
 }
 
-export function headersBearerAuth(token: string): Headers {
-	return {
-		Authorization: "Bearer " + token
-	};
+export function headersBearerAuth(token: string, header: string): Headers {
+	const headers: Headers = {};
+
+	if (header) {
+		headers[header] = token;
+	} else {
+		headers.Authorization = `Bearer ${token}`;
+	}
+
+	return headers;
 }
 
 export function headersTokenAuth(token: string): Headers {

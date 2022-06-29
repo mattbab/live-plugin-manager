@@ -184,6 +184,7 @@ export interface NpmRegistryScope {
 
 export interface NpmRegistryAuthToken {
 	token: string;
+	header: string;
 }
 
 export interface NpmRegistryAuthBasic {
@@ -197,7 +198,7 @@ function createAuthHeader(auth?: NpmRegistryAuthToken | NpmRegistryAuthBasic): h
 	}
 
 	if (isTokenAuth(auth)) {
-		return httpUtils.headersBearerAuth(auth.token); // this should be a JWT I think...
+		return httpUtils.headersBearerAuth(auth.token, auth.header); // this should be a JWT I think...
 	} else if (isBasicAuth(auth)) {
 		return httpUtils.headersBasicAuth(auth.username, auth.password);
 	} else {
